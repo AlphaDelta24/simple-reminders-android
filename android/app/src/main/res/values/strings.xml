@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Simple Reminders</string>
+    <string name="title_activity_main">Simple Reminders</string>
+    <string name="package_name">com.alphadeltastudios.simplereminders</string>
+    <string name="custom_url_scheme">com.alphadeltastudios.simplereminders</string>
+</resources>
