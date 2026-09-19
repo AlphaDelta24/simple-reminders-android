@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Bell, Calendar, Clock, Tag, Home, Settings, Folders, X, Edit2 } from 'lucide-react';
+import { Preferences } from '@capacitor/preferences';
 
 function BottomNav({ activeTab, setActiveTab, darkMode, fabPressed, setFabPressed, showForm, setShowForm }) {
   const activeStyle = 'text-green-400';
@@ -184,27 +185,27 @@ export default function ReminderApp() {
       if (reminders.length === 0) return;
       const today = new Date().toDateString();
       try {
-        const storedCount = await window.storage.get('stat-delivered');
-        const currentCount = storedCount ? JSON.parse(storedCount.value) : 0;
-        const result = await window.storage.get('delivered-today');
-        const data = result ? JSON.parse(result.value) : { date: null, ids: [] };
+        const storedCount = await Preferences.get({ key: 'stat-delivered' });
+        const currentCount = storedCount.value !== null ? JSON.parse(storedCount.value) : 0;
+        const result = await Preferences.get({ key: 'delivered-today' });
+        const data = result.value !== null ? JSON.parse(result.value) : { date: null, ids: [] };
         if (data.date !== today) {
           // New day — reset
           const todayIds = getTodaysReminders().map(r => r.id);
-          await window.storage.set('delivered-today', JSON.stringify({ date: today, ids: todayIds }));
+          await Preferences.set({ key: 'delivered-today', value: JSON.stringify({ date: today, ids: todayIds }) });
           const newCount = currentCount + todayIds.length;
           setDeliveredCount(newCount);
-          await window.storage.set('stat-delivered', JSON.stringify(newCount));
+          await Preferences.set({ key: 'stat-delivered', value: JSON.stringify(newCount) });
         } else {
           // Same day — only count new ones not already tracked
           const todayIds = getTodaysReminders().map(r => r.id);
           const newIds = todayIds.filter(id => !data.ids.includes(id));
           if (newIds.length > 0) {
             const updatedIds = [...data.ids, ...newIds];
-            await window.storage.set('delivered-today', JSON.stringify({ date: today, ids: updatedIds }));
+            await Preferences.set({ key: 'delivered-today', value: JSON.stringify({ date: today, ids: updatedIds }) });
             const newCount = currentCount + newIds.length;
             setDeliveredCount(newCount);
-            await window.storage.set('stat-delivered', JSON.stringify(newCount));
+            await Preferences.set({ key: 'stat-delivered', value: JSON.stringify(newCount) });
           }
         }
       } catch {}
@@ -246,29 +247,30 @@ export default function ReminderApp() {
   const loadReminders = async () => {
     try {
       // Try new batched format first
-      const result = await window.storage.get('reminders-all');
-      if (result) {
+      const result = await Preferences.get({ key: 'reminders-all' });
+      if (result.value !== null) {
         const loaded = JSON.parse(result.value);
         const cleaned = await cleanupExpiredReminders(oneTimeRetention, loaded);
         setReminders(cleaned);
         return;
       }
       // Fall back to old per-key format and migrate
-      const list = await window.storage.list('reminder:');
+      const allKeys = await Preferences.keys();
+      const list = { keys: allKeys.keys.filter(k => k.startsWith('reminder:')) };
       if (list && list.keys && list.keys.length > 0) {
         const loaded = (await Promise.all(
           list.keys.map(async (key) => {
             try {
-              const data = await window.storage.get(key);
-              return data ? JSON.parse(data.value) : null;
+              const data = await Preferences.get({ key });
+              return data.value !== null ? JSON.parse(data.value) : null;
             } catch { return null; }
           })
         )).filter(Boolean);
         setReminders(loaded);
         // Migrate to new format
-        await window.storage.set('reminders-all', JSON.stringify(loaded));
+        await Preferences.set({ key: 'reminders-all', value: JSON.stringify(loaded) });
         for (const key of list.keys) {
-          try { await window.storage.delete(key); } catch {}
+          try { await Preferences.remove({ key }); } catch {}
         }
       }
     } catch {}
@@ -276,7 +278,7 @@ export default function ReminderApp() {
 
   const saveAllReminders = async (updatedReminders) => {
     try {
-      await window.storage.set('reminders-all', JSON.stringify(updatedReminders));
+      await Preferences.set({ key: 'reminders-all', value: JSON.stringify(updatedReminders) });
     } catch (error) {
       console.error('Failed to save reminders:', error);
     }
@@ -284,8 +286,8 @@ export default function ReminderApp() {
 
   const loadCustomCategories = async () => {
     try {
-      const result = await window.storage.get('custom-categories');
-      if (result) {
+      const result = await Preferences.get({ key: 'custom-categories' });
+      if (result.value !== null) {
         const paletteColors = [
           'bg-blue-900 text-blue-300 border-blue-700',
           'bg-sky-900 text-sky-300 border-sky-700',
@@ -303,7 +305,7 @@ export default function ReminderApp() {
           color: paletteColors[i % paletteColors.length]
         }));
         setCustomCategories(migrated);
-        await window.storage.set('custom-categories', JSON.stringify(migrated));
+        await Preferences.set({ key: 'custom-categories', value: JSON.stringify(migrated) });
       }
     } catch (error) {
       // No custom categories yet
@@ -312,8 +314,8 @@ export default function ReminderApp() {
 
   const loadDeletedCategories = async () => {
     try {
-      const result = await window.storage.get('deleted-categories');
-      if (result) {
+      const result = await Preferences.get({ key: 'deleted-categories' });
+      if (result.value !== null) {
         setDeletedDefaultCategories(JSON.parse(result.value));
       }
     } catch (error) {
@@ -323,8 +325,8 @@ export default function ReminderApp() {
 
   const loadDarkMode = async () => {
     try {
-      const result = await window.storage.get('dark-mode');
-      if (result) {
+      const result = await Preferences.get({ key: 'dark-mode' });
+      if (result.value !== null) {
         setDarkMode(JSON.parse(result.value));
       }
     } catch (error) {
@@ -335,14 +337,14 @@ export default function ReminderApp() {
   const loadCompletedToday = async () => {
     try {
       const today = new Date().toDateString();
-      const result = await window.storage.get('completed-today');
-      if (result) {
+      const result = await Preferences.get({ key: 'completed-today' });
+      if (result.value !== null) {
         const data = JSON.parse(result.value);
         if (data.date === today) {
           setSkippedToday(data.ids);
         } else {
           setSkippedToday([]);
-          await window.storage.delete('completed-today');
+          await Preferences.remove({ key: 'completed-today' });
         }
       }
     } catch (error) {
@@ -352,62 +354,62 @@ export default function ReminderApp() {
 
   const loadStats = async () => {
     try {
-      const delivered = await window.storage.get('stat-delivered');
-      if (delivered) setDeliveredCount(JSON.parse(delivered.value));
+      const delivered = await Preferences.get({ key: 'stat-delivered' });
+      if (delivered.value !== null) setDeliveredCount(JSON.parse(delivered.value));
     } catch {}
     try {
-      const skipped = await window.storage.get('stat-skipped');
-      if (skipped) setSkippedAllTime(JSON.parse(skipped.value));
+      const skipped = await Preferences.get({ key: 'stat-skipped' });
+      if (skipped.value !== null) setSkippedAllTime(JSON.parse(skipped.value));
     } catch {}
     try {
-      const config = await window.storage.get('stats-config');
-      if (config) setStatsConfig(JSON.parse(config.value));
+      const config = await Preferences.get({ key: 'stats-config' });
+      if (config.value !== null) setStatsConfig(JSON.parse(config.value));
     } catch {}
   };
 
   const saveStatsConfig = async (config) => {
     try {
-      await window.storage.set('stats-config', JSON.stringify(config));
+      await Preferences.set({ key: 'stats-config', value: JSON.stringify(config) });
     } catch {}
   };
 
   const loadCategoryOrder = async () => {
     try {
-      const result = await window.storage.get('category-order');
-      if (result) setCategoryOrder(JSON.parse(result.value));
+      const result = await Preferences.get({ key: 'category-order' });
+      if (result.value !== null) setCategoryOrder(JSON.parse(result.value));
     } catch {}
   };
 
   const saveCategoryOrder = async (order) => {
     try {
-      await window.storage.set('category-order', JSON.stringify(order));
+      await Preferences.set({ key: 'category-order', value: JSON.stringify(order) });
     } catch {}
   };
 
   const loadRetentionSetting = async () => {
     try {
-      const result = await window.storage.get('one-time-retention');
-      if (result) setOneTimeRetention(JSON.parse(result.value));
+      const result = await Preferences.get({ key: 'one-time-retention' });
+      if (result.value !== null) setOneTimeRetention(JSON.parse(result.value));
     } catch {}
   };
 
   const loadTutorial = async () => {
     try {
-      const result = await window.storage.get('tutorial-seen');
-      if (!result) setShowTutorial(true);
+      const result = await Preferences.get({ key: 'tutorial-seen' });
+      if (result.value === null) setShowTutorial(true);
     } catch {}
   };
 
   const dismissTutorial = async () => {
     setShowTutorial(false);
     try {
-      await window.storage.set('tutorial-seen', 'true');
+      await Preferences.set({ key: 'tutorial-seen', value: 'true' });
     } catch {}
   };
 
   const saveRetentionSetting = async (days) => {
     try {
-      await window.storage.set('one-time-retention', JSON.stringify(days));
+      await Preferences.set({ key: 'one-time-retention', value: JSON.stringify(days) });
     } catch {}
   };
 
@@ -454,7 +456,7 @@ export default function ReminderApp() {
     const updated = [...skippedToday, reminderId];
     setSkippedToday(updated);
     try {
-      await window.storage.set('completed-today', JSON.stringify({ date: today, ids: updated }));
+      await Preferences.set({ key: 'completed-today', value: JSON.stringify({ date: today, ids: updated }) });
     } catch (error) {
       console.error('Failed to save skip:', error);
     }
@@ -462,7 +464,7 @@ export default function ReminderApp() {
     const newSkipped = skippedAllTime + 1;
     setSkippedAllTime(newSkipped);
     try {
-      await window.storage.set('stat-skipped', JSON.stringify(newSkipped));
+      await Preferences.set({ key: 'stat-skipped', value: JSON.stringify(newSkipped) });
     } catch {}
   };
 
@@ -474,7 +476,7 @@ export default function ReminderApp() {
     const newMode = !darkMode;
     setDarkMode(newMode);
     try {
-      await window.storage.set('dark-mode', JSON.stringify(newMode));
+      await Preferences.set({ key: 'dark-mode', value: JSON.stringify(newMode) });
     } catch (error) {
       console.error('Failed to save dark mode preference:', error);
     }
@@ -482,7 +484,7 @@ export default function ReminderApp() {
 
   const saveCustomCategories = async (categories) => {
     try {
-      await window.storage.set('custom-categories', JSON.stringify(categories));
+      await Preferences.set({ key: 'custom-categories', value: JSON.stringify(categories) });
     } catch (error) {
       console.error('Failed to save categories:', error);
     }
@@ -490,7 +492,7 @@ export default function ReminderApp() {
 
   const saveDeletedCategories = async (categories) => {
     try {
-      await window.storage.set('deleted-categories', JSON.stringify(categories));
+      await Preferences.set({ key: 'deleted-categories', value: JSON.stringify(categories) });
     } catch (error) {
       console.error('Failed to save deleted categories:', error);
     }
@@ -989,15 +991,16 @@ export default function ReminderApp() {
   const resetApp = async () => {
     setIsProcessing(true);
     try {
-      try { await window.storage.delete('reminders-all'); } catch {}
+      try { await Preferences.remove({ key: 'reminders-all' }); } catch {}
       // Also clean up old format keys if any remain
       const keys = ['reminders-all', 'custom-categories', 'deleted-categories', 'stat-delivered', 'stat-skipped', 'delivered-today', 'completed-today', 'stats-config', 'category-order', 'one-time-retention'];
-      await Promise.all(keys.map(k => window.storage.delete(k).catch(() => {})));
+      await Promise.all(keys.map(k => Preferences.remove({ key: k }).catch(() => {})));
 
       // Also clean up any old per-key reminders
       try {
-        const oldKeys = await window.storage.list('reminder:');
-        if (oldKeys?.keys?.length) await Promise.all(oldKeys.keys.map(k => window.storage.delete(k).catch(() => {})));
+        const allKeys = await Preferences.keys();
+        const oldKeys = { keys: allKeys.keys.filter(k => k.startsWith('reminder:')) };
+        if (oldKeys?.keys?.length) await Promise.all(oldKeys.keys.map(k => Preferences.remove({ key: k }).catch(() => {})));
       } catch {}
 
       setReminders([]);
@@ -1949,10 +1952,10 @@ export default function ReminderApp() {
                             const n = parseInt(e.target.value) || 0;
                             if (stat.id === 'delivered') {
                               setDeliveredCount(n);
-                              try { await window.storage.set('stat-delivered', JSON.stringify(n)); } catch {}
+                              try { await Preferences.set({ key: 'stat-delivered', value: JSON.stringify(n) }); } catch {}
                             } else {
                               setSkippedAllTime(n);
-                              try { await window.storage.set('stat-skipped', JSON.stringify(n)); } catch {}
+                              try { await Preferences.set({ key: 'stat-skipped', value: JSON.stringify(n) }); } catch {}
                             }
                           }}
                           className={`w-28 px-2 py-0.5 rounded-lg border text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-400 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-300 text-gray-800'}`}
