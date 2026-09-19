@@ -1,8 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Bell, Calendar, Clock, Tag, Home, Settings, Folders, X, Edit2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import type * as React from 'react';
+import { Plus, Trash2, Bell, Calendar, Clock, Home, Settings, Folders, X, Edit2 } from 'lucide-react';
 import { Preferences } from '@capacitor/preferences';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import type { LocalNotificationSchema, Weekday } from '@capacitor/local-notifications';
 
-function BottomNav({ activeTab, setActiveTab, darkMode, fabPressed, setFabPressed, showForm, setShowForm }) {
+interface Reminder {
+  id: string;
+  task: string;
+  time: string;
+  category: string;
+  recurrenceType: string;
+  days: number[];
+  monthlyDays: number[];
+  intervalDays: number;
+  startDate: string;
+  lastTriggered: string | null;
+  enabled: boolean;
+}
+
+interface Category {
+  name: string;
+  color: string;
+  default: boolean;
+}
+
+interface FormData {
+  task: string;
+  time: string;
+  days: number[];
+  category: string | null | undefined;
+  recurrenceType: string;
+  monthlyDays: number[];
+  intervalDays: number;
+  startDate: string;
+  lastTriggered: string | null;
+}
+
+interface DeleteConfirmState {
+  show: boolean;
+  reminder: Reminder | null;
+}
+
+interface ImportData {
+  reminders: Reminder[];
+  customCategories?: Category[];
+  exportDate?: string;
+  version?: string;
+}
+
+interface ImportModalState {
+  show: boolean;
+  data: ImportData | null;
+  confirmReplace: boolean;
+}
+
+interface EditingCategory {
+  name: string;
+  newName: string;
+  color: string;
+}
+
+interface StatConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+}
+
+interface DragState {
+  type: 'category' | 'stat' | null;
+  index: number | null;
+  overIndex: number | null;
+}
+
+interface RetentionConfirm {
+  newValue: number;
+  label: string;
+  count: number;
+}
+
+interface BottomNavProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  darkMode: boolean;
+  fabPressed: boolean;
+  setFabPressed: (pressed: boolean) => void;
+  showForm: boolean;
+  setShowForm: (show: boolean) => void;
+}
+
+function BottomNav({ activeTab, setActiveTab, darkMode, fabPressed, setFabPressed, showForm, setShowForm }: BottomNavProps) {
   const activeStyle = 'text-green-400';
   const inactiveStyle = darkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600';
   const labelStyle = { fontFamily: 'inherit', fontSize: '0.7rem', fontWeight: 500 };
@@ -54,41 +141,41 @@ function BottomNav({ activeTab, setActiveTab, darkMode, fabPressed, setFabPresse
 }
 
 export default function ReminderApp() {
-  const [reminders, setReminders] = useState([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [editingReminder, setEditingReminder] = useState(null);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [activeTab, setActiveTab] = useState('home');
   const [showAllReminders, setShowAllReminders] = useState(false);
   const [recurrenceFilter, setRecurrenceFilter] = useState('all');
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
-  const [customCategories, setCustomCategories] = useState([]);
-  const [deletedDefaultCategories, setDeletedDefaultCategories] = useState([]);
+  const [customCategories, setCustomCategories] = useState<Category[]>([]);
+  const [deletedDefaultCategories, setDeletedDefaultCategories] = useState<string[]>([]);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [fabPressed, setFabPressed] = useState(false);
-  const [longPressTimer, setLongPressTimer] = useState(null);
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
   const [darkMode, setDarkMode] = useState(true);
-  const [deleteConfirmState, setDeleteConfirmState] = useState({ show: false, reminder: null });
-  const [importModalState, setImportModalState] = useState({ show: false, data: null, confirmReplace: false });
+  const [deleteConfirmState, setDeleteConfirmState] = useState<DeleteConfirmState>({ show: false, reminder: null });
+  const [importModalState, setImportModalState] = useState<ImportModalState>({ show: false, data: null, confirmReplace: false });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
-  const [skippedToday, setSkippedToday] = useState([]);
+  const [skippedToday, setSkippedToday] = useState<string[]>([]);
   const [deliveredCount, setDeliveredCount] = useState(0);
   const [skippedAllTime, setSkippedAllTime] = useState(0);
   const [categoryEditMode, setCategoryEditMode] = useState(false);
-  const [categoryOrder, setCategoryOrder] = useState([]);
-  const [editingCategory, setEditingCategory] = useState(null); // { name, color }
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  const [editingCategory, setEditingCategory] = useState<EditingCategory | null>(null); // { name, color }
   const [categorySortAsc, setCategorySortAsc] = useState(true);
-  const [dragState, setDragState] = useState({ type: null, index: null, overIndex: null });
+  const [dragState, setDragState] = useState<DragState>({ type: null, index: null, overIndex: null });
   const [statsEditMode, setStatsEditMode] = useState(false);
   const [oneTimeRetention, setOneTimeRetention] = useState(30); // days, -1 = never
-  const [retentionConfirm, setRetentionConfirm] = useState(null); // { newValue, label, count }
-  const [statsConfig, setStatsConfig] = useState([
+  const [retentionConfirm, setRetentionConfirm] = useState<RetentionConfirm | null>(null); // { newValue, label, count }
+  const [statsConfig, setStatsConfig] = useState<StatConfig[]>([
     { id: 'delivered', label: 'Reminders Delivered', visible: true },
     { id: 'skipped', label: 'Skipped All Time', visible: true },
     { id: 'topCategory', label: 'Most Active Category', visible: true },
@@ -96,8 +183,8 @@ export default function ReminderApp() {
     { id: 'totalReminders', label: 'Total Reminders', visible: true },
     { id: 'categories', label: 'Categories', visible: true },
   ]);
-  const [categoryToDelete, setCategoryToDelete] = useState(null);
-  const [formData, setFormData] = useState({
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [formData, setFormData] = useState<FormData>({
     task: '',
     time: '12:00',
     days: [],
@@ -149,7 +236,7 @@ export default function ReminderApp() {
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Parse YYYY-MM-DD as local time (not UTC) to avoid timezone off-by-one
-  const parseLocalDate = (dateStr) => {
+  const parseLocalDate = (dateStr: string | null | undefined): Date | null => {
     if (!dateStr) return null;
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(y, m - 1, d);
@@ -226,7 +313,20 @@ export default function ReminderApp() {
     if ('Notification' in window && Notification.permission === 'default') {
       await Notification.requestPermission();
     }
-    
+
+    try {
+      const status = await LocalNotifications.checkPermissions();
+      if (status.display !== 'granted') {
+        await LocalNotifications.requestPermissions();
+      }
+      const exactStatus = await LocalNotifications.checkExactNotificationSetting();
+      if (exactStatus.exact_alarm !== 'granted') {
+        await LocalNotifications.changeExactNotificationSetting();
+      }
+    } catch (error) {
+      console.error('Failed to request notification permissions:', error);
+    }
+
     // TODO: Future feature - Add snooze functionality to notifications
     // When notification fires, include snooze button options:
     // - Snooze 5 min
@@ -276,7 +376,7 @@ export default function ReminderApp() {
     } catch {}
   };
 
-  const saveAllReminders = async (updatedReminders) => {
+  const saveAllReminders = async (updatedReminders: Reminder[]) => {
     try {
       await Preferences.set({ key: 'reminders-all', value: JSON.stringify(updatedReminders) });
     } catch (error) {
@@ -299,7 +399,7 @@ export default function ReminderApp() {
           'bg-violet-900 text-violet-300 border-violet-700',
           'bg-lime-900 text-lime-300 border-lime-700',
         ];
-        const cats = JSON.parse(result.value);
+        const cats: Category[] = JSON.parse(result.value);
         const migrated = cats.map((cat, i) => ({
           ...cat,
           color: paletteColors[i % paletteColors.length]
@@ -367,7 +467,7 @@ export default function ReminderApp() {
     } catch {}
   };
 
-  const saveStatsConfig = async (config) => {
+  const saveStatsConfig = async (config: StatConfig[]) => {
     try {
       await Preferences.set({ key: 'stats-config', value: JSON.stringify(config) });
     } catch {}
@@ -380,7 +480,7 @@ export default function ReminderApp() {
     } catch {}
   };
 
-  const saveCategoryOrder = async (order) => {
+  const saveCategoryOrder = async (order: string[]) => {
     try {
       await Preferences.set({ key: 'category-order', value: JSON.stringify(order) });
     } catch {}
@@ -407,19 +507,19 @@ export default function ReminderApp() {
     } catch {}
   };
 
-  const saveRetentionSetting = async (days) => {
+  const saveRetentionSetting = async (days: number) => {
     try {
       await Preferences.set({ key: 'one-time-retention', value: JSON.stringify(days) });
     } catch {}
   };
 
-  const cleanupExpiredReminders = async (retention, currentReminders) => {
+  const cleanupExpiredReminders = async (retention: number, currentReminders: Reminder[]): Promise<Reminder[]> => {
     if (retention === -1) return currentReminders; // never delete
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const updated = currentReminders.filter(r => {
       if (r.recurrenceType !== 'once' || !r.startDate) return true;
-      const d = parseLocalDate(r.startDate);
-      const daysPast = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+      const d = parseLocalDate(r.startDate)!;
+      const daysPast = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
       return daysPast < retention;
     });
     if (updated.length !== currentReminders.length) {
@@ -428,7 +528,129 @@ export default function ReminderApp() {
     return updated;
   };
 
-  const saveCategoryEdit = (oldName, newName, newColor) => {
+  // Reminder ids are Date.now().toString(); hash them down to a small, deterministic
+  // int so each reminder gets a stable block of notification ids to schedule into.
+  const NOTIF_BLOCK_SIZE = 100;
+
+  const hashReminderId = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    }
+    return hash % 500000;
+  };
+
+  const getNotificationBaseId = (reminderId: string) => hashReminderId(reminderId) * NOTIF_BLOCK_SIZE;
+
+  // Sub-ids within a reminder's block:
+  //   base + 0        -> daily / interval / once
+  //   base + 1..7     -> weekly, one per weekday (0=Sun..6=Sat)
+  //   base + 10..40   -> monthly, one per day-of-month (1..31)
+  const getWeeklyNotificationId = (baseId: number, day: number) => baseId + 1 + day;
+  const getMonthlyNotificationId = (baseId: number, day: number) => baseId + 9 + day;
+
+  const cancelReminder = async (reminderId: string) => {
+    const baseId = getNotificationBaseId(reminderId);
+    const ids = [baseId];
+    for (let day = 0; day <= 6; day++) ids.push(getWeeklyNotificationId(baseId, day));
+    for (let day = 1; day <= 31; day++) ids.push(getMonthlyNotificationId(baseId, day));
+    try {
+      await LocalNotifications.cancel({ notifications: ids.map(id => ({ id })) });
+    } catch (error) {
+      console.error('Failed to cancel notification(s):', error);
+    }
+  };
+
+  // For "every X days" reminders there's no native recurring interval that supports
+  // an arbitrary day count, so we schedule a single exact notification for the next
+  // occurrence. It gets rescheduled to the following occurrence whenever the
+  // reminder is next saved/edited.
+  const getNextIntervalDate = (reminder: Reminder): Date | null => {
+    if (!reminder.startDate || !reminder.intervalDays) return null;
+    const [hours, minutes] = reminder.time.split(':').map(Number);
+    const anchor = reminder.lastTriggered ? parseLocalDate(reminder.lastTriggered) : parseLocalDate(reminder.startDate);
+    if (!anchor) return null;
+    const next = new Date(anchor);
+    next.setDate(next.getDate() + reminder.intervalDays);
+    next.setHours(hours, minutes, 0, 0);
+    const now = new Date();
+    while (next.getTime() <= now.getTime()) {
+      next.setDate(next.getDate() + reminder.intervalDays);
+    }
+    return next;
+  };
+
+  const scheduleReminder = async (reminder: Reminder) => {
+    // Clear any previously scheduled notifications for this reminder first, so
+    // edits (e.g. changing recurrence type or days) don't leave stale alarms behind.
+    await cancelReminder(reminder.id);
+
+    const baseId = getNotificationBaseId(reminder.id);
+    const [hours, minutes] = reminder.time.split(':').map(Number);
+    const title = reminder.task;
+    const body = reminder.category;
+    const notifications: LocalNotificationSchema[] = [];
+
+    if (reminder.recurrenceType === 'daily') {
+      notifications.push({
+        id: baseId,
+        title,
+        body,
+        schedule: { on: { hour: hours, minute: minutes }, allowWhileIdle: true },
+      });
+    } else if (reminder.recurrenceType === 'weekly') {
+      reminder.days.forEach(day => {
+        notifications.push({
+          id: getWeeklyNotificationId(baseId, day),
+          title,
+          body,
+          // Plugin weekdays are 1 (Sunday) - 7 (Saturday); our `days` are 0 (Sunday) - 6 (Saturday)
+          schedule: { on: { weekday: (day + 1) as Weekday, hour: hours, minute: minutes }, allowWhileIdle: true },
+        });
+      });
+    } else if (reminder.recurrenceType === 'monthly') {
+      reminder.monthlyDays.forEach(day => {
+        notifications.push({
+          id: getMonthlyNotificationId(baseId, day),
+          title,
+          body,
+          schedule: { on: { day, hour: hours, minute: minutes }, allowWhileIdle: true },
+        });
+      });
+    } else if (reminder.recurrenceType === 'interval') {
+      const nextDate = getNextIntervalDate(reminder);
+      if (nextDate) {
+        notifications.push({
+          id: baseId,
+          title,
+          body,
+          schedule: { at: nextDate, allowWhileIdle: true },
+        });
+      }
+    } else if (reminder.recurrenceType === 'once') {
+      if (reminder.startDate) {
+        const fireDate = parseLocalDate(reminder.startDate)!;
+        fireDate.setHours(hours, minutes, 0, 0);
+        if (fireDate.getTime() > Date.now()) {
+          notifications.push({
+            id: baseId,
+            title,
+            body,
+            schedule: { at: fireDate, allowWhileIdle: true },
+          });
+        }
+      }
+    }
+
+    if (notifications.length === 0) return;
+    try {
+      await LocalNotifications.schedule({ notifications });
+    } catch (error) {
+      console.error('Failed to schedule notification(s):', error);
+    }
+  };
+
+  const saveCategoryEdit = (oldName: string, newName: string, newColor: string) => {
     const trimmed = newName.trim() || oldName;
     // Update custom categories (name + color)
     const updatedCustom = customCategories.map(c =>
@@ -451,7 +673,7 @@ export default function ReminderApp() {
     setEditingCategory(null);
   };
 
-  const markSkipped = async (reminderId) => {
+  const markSkipped = async (reminderId: string) => {
     const today = new Date().toDateString();
     const updated = [...skippedToday, reminderId];
     setSkippedToday(updated);
@@ -468,7 +690,7 @@ export default function ReminderApp() {
     } catch {}
   };
 
-  const isSkippedToday = (reminderId) => {
+  const isSkippedToday = (reminderId: string) => {
     return skippedToday.includes(reminderId);
   };
 
@@ -482,7 +704,7 @@ export default function ReminderApp() {
     }
   };
 
-  const saveCustomCategories = async (categories) => {
+  const saveCustomCategories = async (categories: Category[]) => {
     try {
       await Preferences.set({ key: 'custom-categories', value: JSON.stringify(categories) });
     } catch (error) {
@@ -490,7 +712,7 @@ export default function ReminderApp() {
     }
   };
 
-  const saveDeletedCategories = async (categories) => {
+  const saveDeletedCategories = async (categories: string[]) => {
     try {
       await Preferences.set({ key: 'deleted-categories', value: JSON.stringify(categories) });
     } catch (error) {
@@ -518,13 +740,13 @@ export default function ReminderApp() {
     setShowCategoryForm(false);
   };
 
-  const deleteCustomCategory = (categoryName) => {
+  const deleteCustomCategory = (categoryName: string) => {
     const updated = customCategories.filter(c => c.name !== categoryName);
     setCustomCategories(updated);
     saveCustomCategories(updated);
   };
 
-  const deleteCategory = (categoryName, isDefault) => {
+  const deleteCategory = (categoryName: string, isDefault: boolean) => {
     if (isDefault) {
       const updated = [...deletedDefaultCategories, categoryName];
       setDeletedDefaultCategories(updated);
@@ -538,7 +760,7 @@ export default function ReminderApp() {
 
 
 
-  const deleteReminder = async (id) => {
+  const deleteReminder = async (id: string) => {
     const reminder = reminders.find(r => r.id === id);
     if (!reminder) return;
     
@@ -547,9 +769,10 @@ export default function ReminderApp() {
 
   const confirmDelete = async () => {
     if (!deleteConfirmState.reminder) return;
-    const updated = reminders.filter(r => r.id !== deleteConfirmState.reminder.id);
+    const updated = reminders.filter(r => r.id !== deleteConfirmState.reminder!.id);
     setReminders(updated);
     await saveAllReminders(updated);
+    await cancelReminder(deleteConfirmState.reminder.id);
     setDeleteConfirmState({ show: false, reminder: null });
   };
 
@@ -599,6 +822,7 @@ export default function ReminderApp() {
       const updated = reminders.map(r => r.id === editingReminder.id ? updatedReminder : r);
       setReminders(updated);
       saveAllReminders(updated);
+      scheduleReminder(updatedReminder);
       setEditingReminder(null);
     } else {
       const newReminder = {
@@ -617,6 +841,7 @@ export default function ReminderApp() {
       const updated = [...reminders, newReminder];
       setReminders(updated);
       saveAllReminders(updated);
+      scheduleReminder(newReminder);
     }
     
     setFormData({ 
@@ -633,7 +858,7 @@ export default function ReminderApp() {
     setShowForm(false);
   };
 
-  const toggleDay = (day) => {
+  const toggleDay = (day: number) => {
     setFormData(prev => ({
       ...prev,
       days: prev.days.includes(day)
@@ -642,7 +867,7 @@ export default function ReminderApp() {
     }));
   };
 
-  const toggleMonthlyDay = (day) => {
+  const toggleMonthlyDay = (day: number) => {
     setFormData(prev => ({
       ...prev,
       monthlyDays: prev.monthlyDays.includes(day)
@@ -651,7 +876,7 @@ export default function ReminderApp() {
     }));
   };
 
-  const getRecurrenceDescription = (reminder) => {
+  const getRecurrenceDescription = (reminder: Reminder) => {
     if (reminder.recurrenceType === 'daily') return 'Every day';
     if (reminder.recurrenceType === 'weekly') {
       const dayNames = reminder.days.sort((a, b) => a - b).map(d => weekDays[d]).join(', ');
@@ -662,17 +887,17 @@ export default function ReminderApp() {
       return `Monthly: ${days}${reminder.monthlyDays.length === 1 ? (reminder.monthlyDays[0] === 1 ? 'st' : reminder.monthlyDays[0] === 2 ? 'nd' : reminder.monthlyDays[0] === 3 ? 'rd' : 'th') : ''}`;
     }
     if (reminder.recurrenceType === 'interval') return `Every ${reminder.intervalDays} days`;
-    if (reminder.recurrenceType === 'once') return `Once: ${parseLocalDate(reminder.startDate).toLocaleDateString()}`;
+    if (reminder.recurrenceType === 'once') return `Once: ${parseLocalDate(reminder.startDate)!.toLocaleDateString()}`;
     return '';
   };
 
-  const getCategoryColor = (categoryName) => {
+  const getCategoryColor = (categoryName: string | null | undefined) => {
     if (!categoryName || categoryName === 'None') return 'bg-gray-100 text-gray-500 border-gray-200';
     const category = allCategories.find(c => c.name === categoryName);
     return category ? category.color : 'bg-gray-100 text-gray-500 border-gray-200';
   };
 
-  const formatTime = (time24) => {
+  const formatTime = (time24: string) => {
     const [hours, minutes] = time24.split(':');
     const h = parseInt(hours);
     const ampm = h >= 12 ? 'PM' : 'AM';
@@ -691,21 +916,21 @@ export default function ReminderApp() {
       if (r.recurrenceType === 'monthly') return r.monthlyDays.includes(dayOfMonth);
       if (r.recurrenceType === 'interval') {
         if (!r.startDate) return false;
-        const start = parseLocalDate(r.startDate);
-        const lastTrig = r.lastTriggered ? parseLocalDate(r.lastTriggered) : start;
-        const daysSinceLastTrigger = Math.floor((today - lastTrig) / (1000 * 60 * 60 * 24));
+        const start = parseLocalDate(r.startDate)!;
+        const lastTrig = r.lastTriggered ? parseLocalDate(r.lastTriggered)! : start;
+        const daysSinceLastTrigger = Math.floor((today.getTime() - lastTrig.getTime()) / (1000 * 60 * 60 * 24));
         return daysSinceLastTrigger >= r.intervalDays;
       }
       if (r.recurrenceType === 'once') {
         if (!r.startDate) return false;
-        const reminderDate = parseLocalDate(r.startDate);
+        const reminderDate = parseLocalDate(r.startDate)!;
         return today.toDateString() === reminderDate.toDateString();
       }
       return false;
     });
   };
 
-  const isReminderPassed = (reminder) => {
+  const isReminderPassed = (reminder: Reminder) => {
     const today = new Date();
     const dayOfWeek = today.getDay();
     const dayOfMonth = today.getDate();
@@ -720,13 +945,13 @@ export default function ReminderApp() {
       isForToday = reminder.monthlyDays.includes(dayOfMonth);
     } else if (reminder.recurrenceType === 'interval') {
       if (!reminder.startDate) return false;
-      const start = parseLocalDate(reminder.startDate);
-      const lastTrig = reminder.lastTriggered ? parseLocalDate(reminder.lastTriggered) : start;
-      const daysSinceLastTrigger = Math.floor((today - lastTrig) / (1000 * 60 * 60 * 24));
+      const start = parseLocalDate(reminder.startDate)!;
+      const lastTrig = reminder.lastTriggered ? parseLocalDate(reminder.lastTriggered)! : start;
+      const daysSinceLastTrigger = Math.floor((today.getTime() - lastTrig.getTime()) / (1000 * 60 * 60 * 24));
       isForToday = daysSinceLastTrigger >= reminder.intervalDays;
     } else if (reminder.recurrenceType === 'once') {
       if (!reminder.startDate) return false;
-      const reminderDate = parseLocalDate(reminder.startDate);
+      const reminderDate = parseLocalDate(reminder.startDate)!;
       isForToday = today.toDateString() === reminderDate.toDateString();
     }
     
@@ -739,19 +964,19 @@ export default function ReminderApp() {
     return today > reminderTime;
   };
 
-  const getRemindersForDate = (date) => {
+  const getRemindersForDate = (date: string | null) => {
     if (!date) return [];
-    const targetDate = parseLocalDate(date);
+    const targetDate = parseLocalDate(date)!;
     const dayOfWeek = targetDate.getDay();
     const dayOfMonth = targetDate.getDate();
-    
+
     return reminders.filter(r => {
       if (r.recurrenceType === 'daily') return true;
       if (r.recurrenceType === 'weekly') return r.days.includes(dayOfWeek);
       if (r.recurrenceType === 'monthly') return r.monthlyDays.includes(dayOfMonth);
       if (r.recurrenceType === 'once') {
         if (!r.startDate) return false;
-        const reminderDate = parseLocalDate(r.startDate);
+        const reminderDate = parseLocalDate(r.startDate)!;
         return targetDate.toDateString() === reminderDate.toDateString();
       }
       // interval reminders intentionally excluded — future dates can't be predicted without tracking
@@ -759,7 +984,7 @@ export default function ReminderApp() {
     });
   };
 
-  const getRemindersByCategory = (categoryName) => {
+  const getRemindersByCategory = (categoryName: string) => {
     return reminders.filter(r => r.category === categoryName);
   };
 
@@ -799,12 +1024,12 @@ export default function ReminderApp() {
     setSelectedDate(null);
   };
 
-  const handleDateClick = (day) => {
+  const handleDateClick = (day: number) => {
     const dateStr = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     setSelectedDate(selectedDate === dateStr ? null : dateStr);
   };
 
-  const addReminderForDate = (dateStr) => {
+  const addReminderForDate = (dateStr: string) => {
     setFormData({
       task: '',
       time: '12:00',
@@ -839,7 +1064,7 @@ export default function ReminderApp() {
     URL.revokeObjectURL(url);
   };
 
-  const handleLongPressStart = (reminder) => {
+  const handleLongPressStart = (reminder: Reminder) => {
     const timer = setTimeout(() => {
       // Open edit form with reminder data
       setFormData({
@@ -866,7 +1091,7 @@ export default function ReminderApp() {
     }
   };
 
-  const handleEditReminder = (reminder) => {
+  const handleEditReminder = (reminder: Reminder) => {
     setFormData({
       task: reminder.task,
       time: reminder.time,
@@ -882,7 +1107,7 @@ export default function ReminderApp() {
     setShowForm(true);
   };
 
-  const handleImportFile = async (event) => {
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -912,7 +1137,7 @@ export default function ReminderApp() {
     event.target.value = '';
   };
 
-  const handleDirectImport = async (importData) => {
+  const handleDirectImport = async (importData: ImportData) => {
     setIsProcessing(true);
     setProcessingMessage('Importing reminders...');
     try {
@@ -991,6 +1216,7 @@ export default function ReminderApp() {
   const resetApp = async () => {
     setIsProcessing(true);
     try {
+      try { await LocalNotifications.cancelAll(); } catch {}
       try { await Preferences.remove({ key: 'reminders-all' }); } catch {}
       // Also clean up old format keys if any remain
       const keys = ['reminders-all', 'custom-categories', 'deleted-categories', 'stat-delivered', 'stat-skipped', 'delivered-today', 'completed-today', 'stats-config', 'category-order', 'one-time-retention'];
@@ -1015,41 +1241,26 @@ export default function ReminderApp() {
       setTimeout(() => setImportStatus(''), 3000);
     } catch (error) {
       console.error('Failed to reset app:', error);
-      setImportStatus('Error resetting app: ' + error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      setImportStatus('Error resetting app: ' + message);
       setTimeout(() => setImportStatus(''), 5000);
     }
     setIsProcessing(false);
     setShowResetConfirm(false);
   };
 
-  const toggleStatVisible = (id) => {
+  const toggleStatVisible = (id: string) => {
     const updated = statsConfig.map(s => s.id === id ? { ...s, visible: !s.visible } : s);
     setStatsConfig(updated);
     saveStatsConfig(updated);
   };
 
-  const moveStatUp = (index) => {
-    if (index === 0) return;
-    const updated = [...statsConfig];
-    [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
-    setStatsConfig(updated);
-    saveStatsConfig(updated);
-  };
-
-  const moveStatDown = (index) => {
-    if (index === statsConfig.length - 1) return;
-    const updated = [...statsConfig];
-    [updated[index], updated[index + 1]] = [updated[index + 1], updated[index]];
-    setStatsConfig(updated);
-    saveStatsConfig(updated);
-  };
-
-  const getStatValue = (id) => {
+  const getStatValue = (id: string) => {
     switch (id) {
       case 'delivered': return deliveredCount;
       case 'skipped': return skippedAllTime;
       case 'topCategory': {
-        const counts = {};
+        const counts: Record<string, number> = {};
         reminders.forEach(r => { counts[r.category] = (counts[r.category] || 0) + 1; });
         const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
         return top ? top[0] : '—';
@@ -1069,16 +1280,16 @@ export default function ReminderApp() {
     }
   };
 
-  const handleDragStart = (type, index) => {
+  const handleDragStart = (type: 'category' | 'stat', index: number) => {
     setDragState({ type, index, overIndex: index });
   };
 
-  const handleDragOver = (e, overIndex) => {
+  const handleDragOver = (e: React.DragEvent, overIndex: number) => {
     e.preventDefault();
     setDragState(prev => ({ ...prev, overIndex }));
   };
 
-  const handleDrop = (type, overIndex) => {
+  const handleDrop = (type: 'category' | 'stat', overIndex: number) => {
     const { index } = dragState;
     if (index === null || index === overIndex) {
       setDragState({ type: null, index: null, overIndex: null });
@@ -1100,37 +1311,6 @@ export default function ReminderApp() {
     setDragState({ type: null, index: null, overIndex: null });
   };
 
-  const handleTouchDrag = (type, list, setList, saveFn) => {
-    let startY = 0;
-    let currentIndex = 0;
-    let itemHeight = 72;
-
-    return {
-      onTouchStart: (e, index) => {
-        startY = e.touches[0].clientY;
-        currentIndex = index;
-        setDragState({ type, index, overIndex: index });
-      },
-      onTouchMove: (e, index) => {
-        const deltaY = e.touches[0].clientY - startY;
-        const newIndex = Math.max(0, Math.min(list.length - 1, Math.round(index + deltaY / itemHeight)));
-        setDragState(prev => ({ ...prev, overIndex: newIndex }));
-      },
-      onTouchEnd: (e, index) => {
-        const deltaY = e.changedTouches[0].clientY - startY;
-        const newIndex = Math.max(0, Math.min(list.length - 1, Math.round(index + deltaY / itemHeight)));
-        if (newIndex !== index) {
-          const updated = [...list];
-          const [moved] = updated.splice(index, 1);
-          updated.splice(newIndex, 0, moved);
-          setList(updated);
-          saveFn(updated);
-        }
-        setDragState({ type: null, index: null, overIndex: null });
-      }
-    };
-  };
-
   const renderContent = () => {
     if (activeTab === 'home') {
       const todaysReminders = getTodaysReminders();
@@ -1140,7 +1320,7 @@ export default function ReminderApp() {
         ? reminders.filter(r => {
             if (r.recurrenceType === 'once') {
               if (!r.startDate) return false;
-              const d = parseLocalDate(r.startDate);
+              const d = parseLocalDate(r.startDate)!;
               return d >= today; // hide if before today
             }
             return true; // recurring reminders always show
@@ -1382,7 +1562,7 @@ export default function ReminderApp() {
                 }}
                 onMouseUp={() => { if (longPressTimer) { clearTimeout(longPressTimer); setLongPressTimer(null); } }}
                 onMouseLeave={() => { if (longPressTimer) { clearTimeout(longPressTimer); setLongPressTimer(null); } }}
-                onTouchStart={(e) => {
+                onTouchStart={() => {
                   if (categoryEditMode) return;
                   const t = setTimeout(() => setCategoryEditMode(true), 500);
                   setLongPressTimer(t);
@@ -1399,11 +1579,11 @@ export default function ReminderApp() {
                     {categoryEditMode && (
                       <div
                         className="cursor-grab active:cursor-grabbing p-1 touch-none"
-                        onTouchStart={(e) => {
+                        onTouchStart={(e: React.TouchEvent) => {
                           const startY = e.touches[0].clientY;
                           const startIndex = index;
                           const itemHeight = 80;
-                          const onMove = (ev) => {
+                          const onMove = (ev: TouchEvent) => {
                             const delta = ev.touches[0].clientY - startY;
                             const newIdx = Math.max(0, Math.min(allCategories.length - 1, Math.round(startIndex + delta / itemHeight)));
                             setDragState({ type: 'category', index: startIndex, overIndex: newIdx });
@@ -1414,7 +1594,7 @@ export default function ReminderApp() {
                             document.removeEventListener('touchcancel', cleanup);
                             setDragState({ type: null, index: null, overIndex: null });
                           };
-                          const onEnd = (ev) => {
+                          const onEnd = (ev: TouchEvent) => {
                             const delta = ev.changedTouches[0].clientY - startY;
                             const newIdx = Math.max(0, Math.min(allCategories.length - 1, Math.round(startIndex + delta / itemHeight)));
                             if (newIdx !== startIndex) {
@@ -1467,8 +1647,8 @@ export default function ReminderApp() {
                   <div className={`mt-3 pt-3 border-t ${darkMode ? 'border-gray-600' : 'border-gray-100'}`}>
                     <input
                       type="text"
-                      value={editingCategory.newName}
-                      onChange={(e) => setEditingCategory({ ...editingCategory, newName: e.target.value })}
+                      value={editingCategory!.newName}
+                      onChange={(e) => setEditingCategory({ ...editingCategory!, newName: e.target.value })}
                       className={`w-full px-3 py-2 rounded-lg border text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${darkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-gray-200 text-gray-800'}`}
                       placeholder="Category name"
                     />
@@ -1477,9 +1657,9 @@ export default function ReminderApp() {
                         <button
                           key={color}
                           type="button"
-                          onClick={() => setEditingCategory({ ...editingCategory, color })}
+                          onClick={() => setEditingCategory({ ...editingCategory!, color })}
                           className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition ${color} ${
-                            editingCategory.color === color ? 'ring-2 ring-offset-1 ring-indigo-400 scale-110' : 'opacity-60 hover:opacity-100'
+                            editingCategory!.color === color ? 'ring-2 ring-offset-1 ring-indigo-400 scale-110' : 'opacity-60 hover:opacity-100'
                           }`}
                         >
                           Aa
@@ -1496,7 +1676,7 @@ export default function ReminderApp() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => saveCategoryEdit(category.name, editingCategory.newName, editingCategory.color)}
+                        onClick={() => saveCategoryEdit(category.name, editingCategory!.newName, editingCategory!.color)}
                         className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-900 text-white hover:bg-blue-800 transition border border-blue-600"
                       >
                         Save
@@ -1595,7 +1775,7 @@ export default function ReminderApp() {
                     if (r.recurrenceType === 'weekly') return r.days.includes(dayOfWeek);
                     if (r.recurrenceType === 'monthly') return r.monthlyDays.includes(day);
                     if (r.recurrenceType === 'once' && r.startDate) {
-                      return parseLocalDate(dateStr).toDateString() === parseLocalDate(r.startDate).toDateString();
+                      return parseLocalDate(dateStr)!.toDateString() === parseLocalDate(r.startDate)!.toDateString();
                     }
                     return false;
                   });
@@ -1628,7 +1808,7 @@ export default function ReminderApp() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                  {parseLocalDate(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  {parseLocalDate(selectedDate)!.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </h3>
                 <button
                   type="button"
@@ -1654,7 +1834,7 @@ export default function ReminderApp() {
                 </div>
               ) : (
                 getRemindersForDate(selectedDate).sort((a, b) => a.time.localeCompare(b.time)).map((reminder) => {
-                  const selectedDateObj = parseLocalDate(selectedDate);
+                  const selectedDateObj = parseLocalDate(selectedDate)!;
                   const now = new Date();
                   const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
                   const isPastDay = selectedDateObj < todayMidnight;
@@ -1755,8 +1935,8 @@ export default function ReminderApp() {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
                     const wouldDelete = opt.value === -1 ? 0 : reminders.filter(r => {
                       if (r.recurrenceType !== 'once' || !r.startDate) return false;
-                      const d = parseLocalDate(r.startDate);
-                      return Math.floor((today - d) / (1000 * 60 * 60 * 24)) >= opt.value;
+                      const d = parseLocalDate(r.startDate)!;
+                      return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)) >= opt.value;
                     }).length;
                     if (wouldDelete > 0) {
                       setRetentionConfirm({ newValue: opt.value, label: opt.label, count: wouldDelete });
@@ -1881,11 +2061,11 @@ export default function ReminderApp() {
                     >
                       <div
                         className="cursor-grab active:cursor-grabbing p-1 touch-none"
-                        onTouchStart={(e) => {
+                        onTouchStart={(e: React.TouchEvent) => {
                           const startY = e.touches[0].clientY;
                           const startIndex = index;
                           const itemHeight = 48;
-                          const onMove = (ev) => {
+                          const onMove = (ev: TouchEvent) => {
                             const delta = ev.touches[0].clientY - startY;
                             const newIdx = Math.max(0, Math.min(statsConfig.length - 1, Math.round(startIndex + delta / itemHeight)));
                             setDragState({ type: 'stat', index: startIndex, overIndex: newIdx });
@@ -1896,7 +2076,7 @@ export default function ReminderApp() {
                             document.removeEventListener('touchcancel', cleanup);
                             setDragState({ type: null, index: null, overIndex: null });
                           };
-                          const onEnd = (ev) => {
+                          const onEnd = (ev: TouchEvent) => {
                             const delta = ev.changedTouches[0].clientY - startY;
                             const newIdx = Math.max(0, Math.min(statsConfig.length - 1, Math.round(startIndex + delta / itemHeight)));
                             if (newIdx !== startIndex) {
