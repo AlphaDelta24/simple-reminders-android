@@ -4,6 +4,17 @@ import { Plus, Trash2, Bell, Calendar, Clock, Home, Settings, Folders, X, Edit2 
 import { Preferences } from '@capacitor/preferences';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { LocalNotificationSchema, Weekday } from '@capacitor/local-notifications';
+import { registerPlugin } from '@capacitor/core';
+import adLogo from './assets/logo.jpeg';
+
+interface BatterySettingsPlugin {
+  openSettings(): Promise<void>;
+}
+
+// Opens the app's system "App info" settings page (Settings.ACTION_APPLICATION_DETAILS_SETTINGS),
+// where the user can set battery usage to Unrestricted. Backed by a small native plugin —
+// Capacitor's own App plugin has no API for launching arbitrary system settings screens.
+const BatterySettings = registerPlugin<BatterySettingsPlugin>('BatterySettings');
 
 interface Reminder {
   id: string;
@@ -140,6 +151,182 @@ function BottomNav({ activeTab, setActiveTab, darkMode, fabPressed, setFabPresse
   );
 }
 
+interface SetupWizardProps {
+  darkMode: boolean;
+  step: number;
+  setStep: (step: number) => void;
+  selectTheme: (isDark: boolean) => void;
+  catchupNotifications: boolean;
+  toggleCatchup: () => void;
+  notifPermGranted: boolean;
+  requestNotificationPermission: () => void;
+  openBatterySettings: () => void;
+  onFinish: () => void;
+  adLogo: string;
+}
+
+function SetupWizard({
+  darkMode, step, setStep, selectTheme, catchupNotifications, toggleCatchup,
+  notifPermGranted, requestNotificationPermission, openBatterySettings, onFinish, adLogo
+}: SetupWizardProps) {
+  const navyGradient = 'linear-gradient(135deg, #0d1b3e 0%, #1a2f6b 60%, #0f2350 100%)';
+  const cardBg = darkMode ? 'bg-gray-700' : 'bg-white';
+  const textMuted = darkMode ? 'text-gray-400' : 'text-gray-500';
+  const isCoverScreen = step === 1 || step === 5;
+
+  return (
+    <div
+      className={`fixed inset-0 z-[300] flex flex-col ${isCoverScreen ? '' : darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}
+      style={isCoverScreen ? { background: navyGradient } : undefined}
+    >
+      {step === 1 && (
+        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" className="w-24 h-24 mb-8 rounded-2xl shadow-lg" />}
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '1.6rem', letterSpacing: '0.16em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
+            SIMPLE REMINDERS
+          </h1>
+          <p style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 600, fontSize: '0.6rem', letterSpacing: '0.12em', color: '#4CAF50', marginTop: '6px' }}>
+            ALPHA DELTA STUDIOS
+          </p>
+          <p className="text-gray-400 text-sm mt-6">Let's get you set up</p>
+          <button
+            type="button"
+            onClick={() => setStep(2)}
+            className="mt-12 w-full max-w-xs bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition"
+          >
+            Get Started
+          </button>
+        </div>
+      )}
+
+      {(step === 2 || step === 3 || step === 4) && (
+        <div className="flex-1 flex flex-col p-6 overflow-y-auto">
+          <div className="flex items-center justify-center gap-2 mb-8 mt-4">
+            {[2, 3, 4].map(s => (
+              <div
+                key={s}
+                className={`h-1.5 rounded-full transition-all ${s === step ? 'w-8 bg-green-500' : 'w-1.5 bg-gray-500 bg-opacity-40'}`}
+              />
+            ))}
+          </div>
+
+          <div className="flex-1">
+            {step === 2 && (
+              <>
+                <h2 className={`text-xl font-bold text-center mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Choose Your Theme</h2>
+                <p className={`text-sm text-center mb-6 ${textMuted}`}>You can change this any time in Settings.</p>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => selectTheme(true)}
+                    className={`flex-1 rounded-2xl p-4 border-2 transition bg-gray-800 ${darkMode ? 'border-green-500' : 'border-gray-500 border-opacity-40'}`}
+                  >
+                    <div className="w-full h-16 rounded-lg bg-gray-900 border border-gray-700 mb-3" />
+                    <p className="text-white font-semibold text-sm">Dark Mode</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectTheme(false)}
+                    className={`flex-1 rounded-2xl p-4 border-2 transition bg-white ${!darkMode ? 'border-green-500' : 'border-gray-500 border-opacity-40'}`}
+                  >
+                    <div className="w-full h-16 rounded-lg bg-gray-100 border border-gray-200 mb-3" />
+                    <p className="text-gray-800 font-semibold text-sm">Light Mode</p>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <h2 className={`text-xl font-bold text-center mb-6 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Allow Notifications</h2>
+                <div className={`${cardBg} rounded-xl p-4 mb-4`}>
+                  <h3 className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Notifications</h3>
+                  <p className={`text-sm mb-4 ${textMuted}`}>
+                    Simple Reminders needs notification permission to send you reminders. Without it the app is just a list.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={requestNotificationPermission}
+                    className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition"
+                  >
+                    {notifPermGranted ? 'Permission Granted ✓' : 'Grant Permission'}
+                  </button>
+                </div>
+                <div className={`${cardBg} rounded-xl p-4`}>
+                  <h3 className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Battery</h3>
+                  <p className={`text-sm mb-4 ${textMuted}`}>
+                    Android may put the app to sleep if you haven't opened it recently, which can delay or block reminders. Set Simple Reminders to Unrestricted to prevent this.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openBatterySettings}
+                    className="w-full bg-blue-900 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition border border-blue-600"
+                  >
+                    Open Battery Settings
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 4 && (
+              <>
+                <h2 className={`text-xl font-bold text-center mb-4 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Missed Reminders</h2>
+                <p className={`text-sm text-center mb-6 ${textMuted}`}>
+                  If your phone was off or restarted, Simple Reminders can fire any reminders you missed as soon as it boots back up. Some people find this helpful. Others find it annoying. Your call.
+                </p>
+                <div className={`${cardBg} rounded-xl p-4 flex items-center justify-between`}>
+                  <span className={`text-sm font-bold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Catch-up Alerts</span>
+                  <button
+                    type="button"
+                    onClick={toggleCatchup}
+                    className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${catchupNotifications ? 'bg-blue-900' : 'bg-gray-500'}`}
+                  >
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${catchupNotifications ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-6 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setStep(step - 1)}
+              className={`flex-1 py-3 rounded-xl font-semibold border transition ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(step + 1)}
+              className="flex-1 bg-blue-900 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition border border-blue-600"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 5 && (
+        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" className="w-24 h-24 mb-8 rounded-2xl shadow-lg" />}
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '1.5rem', letterSpacing: '0.1em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
+            You're all set.
+          </h1>
+          <p className="text-gray-400 text-sm mt-4">Your reminders are ready to go.</p>
+          <button
+            type="button"
+            onClick={onFinish}
+            className="mt-12 w-full max-w-xs bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition"
+          >
+            Let's Go
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReminderApp() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -162,6 +349,11 @@ export default function ReminderApp() {
   const [importModalState, setImportModalState] = useState<ImportModalState>({ show: false, data: null, confirmReplace: false });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [notifPermGranted, setNotifPermGranted] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [catchupNotifications, setCatchupNotifications] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [skippedToday, setSkippedToday] = useState<string[]>([]);
@@ -261,10 +453,12 @@ export default function ReminderApp() {
     loadCategoryOrder();
     loadRetentionSetting();
     loadTutorial();
+    loadSetupComplete();
+    loadNotificationSettings();
     requestNotificationPermission();
   }, []);
 
-  const anyModalOpen = showForm || showCategoryManager || deleteConfirmState.show || importModalState.show || showResetConfirm || !!categoryToDelete || (isProcessing && !importModalState.show && !showResetConfirm);
+  const anyModalOpen = showForm || showCategoryManager || deleteConfirmState.show || importModalState.show || showResetConfirm || !!categoryToDelete || showWizard || (isProcessing && !importModalState.show && !showResetConfirm);
 
   useEffect(() => {
     // Track delivered: increment once per reminder per day when it appears on today's screen
@@ -505,6 +699,76 @@ export default function ReminderApp() {
     try {
       await Preferences.set({ key: 'tutorial-seen', value: 'true' });
     } catch {}
+  };
+
+  const loadSetupComplete = async () => {
+    try {
+      const result = await Preferences.get({ key: 'setup-complete' });
+      if (result.value === null) setShowWizard(true);
+    } catch {}
+  };
+
+  const loadNotificationSettings = async () => {
+    try {
+      const enabled = await Preferences.get({ key: 'notifications-enabled' });
+      setNotificationsEnabled(enabled.value !== null ? JSON.parse(enabled.value) : true);
+    } catch {}
+    try {
+      const catchup = await Preferences.get({ key: 'catchup-notifications' });
+      setCatchupNotifications(catchup.value !== null ? JSON.parse(catchup.value) : false);
+    } catch {}
+  };
+
+  const selectWizardTheme = async (isDark: boolean) => {
+    setDarkMode(isDark);
+    try {
+      await Preferences.set({ key: 'dark-mode', value: JSON.stringify(isDark) });
+    } catch {}
+  };
+
+  const toggleCatchupNotifications = async () => {
+    const newValue = !catchupNotifications;
+    setCatchupNotifications(newValue);
+    try {
+      await Preferences.set({ key: 'catchup-notifications', value: JSON.stringify(newValue) });
+    } catch {}
+  };
+
+  const toggleNotificationsEnabled = async () => {
+    const newValue = !notificationsEnabled;
+    setNotificationsEnabled(newValue);
+    try {
+      await Preferences.set({ key: 'notifications-enabled', value: JSON.stringify(newValue) });
+    } catch {}
+    if (newValue) {
+      for (const r of reminders) await scheduleReminder(r);
+    } else {
+      for (const r of reminders) await cancelReminder(r.id);
+    }
+  };
+
+  const requestWizardNotificationPermission = async () => {
+    try {
+      const status = await LocalNotifications.requestPermissions();
+      setNotifPermGranted(status.display === 'granted');
+    } catch (error) {
+      console.error('Failed to request notification permission:', error);
+    }
+  };
+
+  const openBatterySettings = async () => {
+    try {
+      await BatterySettings.openSettings();
+    } catch (error) {
+      console.error('Failed to open battery settings:', error);
+    }
+  };
+
+  const finishWizard = async () => {
+    try {
+      await Preferences.set({ key: 'setup-complete', value: 'true' });
+    } catch {}
+    setShowWizard(false);
   };
 
   const saveRetentionSetting = async (days: number) => {
@@ -822,7 +1086,7 @@ export default function ReminderApp() {
       const updated = reminders.map(r => r.id === editingReminder.id ? updatedReminder : r);
       setReminders(updated);
       saveAllReminders(updated);
-      scheduleReminder(updatedReminder);
+      if (notificationsEnabled) scheduleReminder(updatedReminder);
       setEditingReminder(null);
     } else {
       const newReminder = {
@@ -841,7 +1105,7 @@ export default function ReminderApp() {
       const updated = [...reminders, newReminder];
       setReminders(updated);
       saveAllReminders(updated);
-      scheduleReminder(newReminder);
+      if (notificationsEnabled) scheduleReminder(newReminder);
     }
     
     setFormData({ 
@@ -1920,7 +2184,46 @@ export default function ReminderApp() {
               </button>
             </div>
           </div>
-          
+
+          <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
+            <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-3`}>Notifications</h3>
+            <div className="flex items-center justify-between mb-4">
+              <p className={`text-sm font-bold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Enable Notifications</p>
+              <button
+                type="button"
+                onClick={toggleNotificationsEnabled}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  notificationsEnabled ? 'bg-blue-900' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    notificationsEnabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            {!notificationsEnabled && (
+              <p className="text-xs text-orange-400 mb-4">All scheduled notifications are paused.</p>
+            )}
+            <div className="flex items-center justify-between">
+              <p className={`text-sm font-bold ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Catch-up Alerts</p>
+              <button
+                type="button"
+                onClick={toggleCatchupNotifications}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                  catchupNotifications ? 'bg-blue-900' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    catchupNotifications ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
             <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-1`}>One-Time Reminders</h3>
             <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-3`}>Auto-delete past one-time reminders after:</p>
@@ -2814,6 +3117,22 @@ export default function ReminderApp() {
             </div>
           </div>
         </div>
+      )}
+
+      {showWizard && (
+        <SetupWizard
+          darkMode={darkMode}
+          step={wizardStep}
+          setStep={setWizardStep}
+          selectTheme={selectWizardTheme}
+          catchupNotifications={catchupNotifications}
+          toggleCatchup={toggleCatchupNotifications}
+          notifPermGranted={notifPermGranted}
+          requestNotificationPermission={requestWizardNotificationPermission}
+          openBatterySettings={openBatterySettings}
+          onFinish={finishWizard}
+          adLogo={adLogo}
+        />
       )}
 
       {/* Bottom Navigation */}
