@@ -181,7 +181,7 @@ function SetupWizard({
     >
       {step === 1 && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" className="w-24 h-24 mb-8 rounded-2xl shadow-lg" />}
+          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" style={{ width: '200px', height: 'auto', borderRadius: '12px', marginBottom: '16px' }} />}
           <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '1.6rem', letterSpacing: '0.16em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
             SIMPLE REMINDERS
           </h1>
@@ -255,7 +255,7 @@ function SetupWizard({
                 <div className={`${cardBg} rounded-xl p-4`}>
                   <h3 className={`font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>Battery</h3>
                   <p className={`text-sm mb-4 ${textMuted}`}>
-                    Android may put the app to sleep if you haven't opened it recently, which can delay or block reminders. Set Simple Reminders to Unrestricted to prevent this.
+                    Android can pause apps it hasn't seen in a while, which will stop your reminders. Tap the button below, scroll to the bottom, and make sure "Pause app activity if unused" is turned OFF.
                   </p>
                   <button
                     type="button"
@@ -769,6 +769,7 @@ export default function ReminderApp() {
       await Preferences.set({ key: 'setup-complete', value: 'true' });
     } catch {}
     setShowWizard(false);
+    setShowTutorial(true);
   };
 
   const saveRetentionSetting = async (days: number) => {
@@ -2164,7 +2165,19 @@ export default function ReminderApp() {
       return (
         <div className="space-y-4">
           <h2 className={`text-xl font-bold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-4`}>Settings</h2>
-          
+
+          <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
+            <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-800'} mb-3`}>Help</h3>
+            <button
+              type="button"
+              onClick={() => setShowTutorial(true)}
+              className="w-full bg-blue-900 text-white px-4 py-3 rounded-lg hover:bg-blue-800 transition flex items-center justify-center gap-2 border border-blue-600"
+            >
+              <Bell size={20} />
+              <span>View App Tutorial</span>
+            </button>
+          </div>
+
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
             <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-3`}>Appearance</h3>
             <div className="flex items-center justify-between">
@@ -2225,46 +2238,10 @@ export default function ReminderApp() {
           </div>
 
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
-            <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-1`}>One-Time Reminders</h3>
-            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-3`}>Auto-delete past one-time reminders after:</p>
-            <div className="flex gap-1.5 flex-nowrap justify-between">
-              {[{ label: '1 day', value: 1 }, { label: '7 days', value: 7 }, { label: '30 days', value: 30 }, { label: '90 days', value: 90 }, { label: 'Never', value: -1 }].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={async () => {
-                    if (opt.value === oneTimeRetention) return;
-                    // Count how many would be deleted
-                    const today = new Date(); today.setHours(0, 0, 0, 0);
-                    const wouldDelete = opt.value === -1 ? 0 : reminders.filter(r => {
-                      if (r.recurrenceType !== 'once' || !r.startDate) return false;
-                      const d = parseLocalDate(r.startDate)!;
-                      return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)) >= opt.value;
-                    }).length;
-                    if (wouldDelete > 0) {
-                      setRetentionConfirm({ newValue: opt.value, label: opt.label, count: wouldDelete });
-                    } else {
-                      setOneTimeRetention(opt.value);
-                      await saveRetentionSetting(opt.value);
-                    }
-                  }}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition text-center ${
-                    oneTimeRetention === opt.value
-                      ? 'bg-blue-900 text-white border-blue-600'
-                      : darkMode ? 'bg-transparent text-gray-300 border-gray-500 hover:border-gray-400' : 'bg-transparent text-gray-600 border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
             <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-3`}>Categories</h3>
-            <button 
-              type="button" 
-              onClick={() => setShowCategoryManager(true)} 
+            <button
+              type="button"
+              onClick={() => setShowCategoryManager(true)}
               className="w-full bg-blue-900 text-white px-4 py-3 rounded-lg hover:bg-blue-800 transition flex items-center justify-center gap-2 border border-blue-600"
             >
               <Folders size={20} />
@@ -2300,7 +2277,7 @@ export default function ReminderApp() {
                 </svg>
                 <span>Export All Data</span>
               </button>
-              
+
               {importStatus && (
                 <div className={`p-3 rounded-lg text-sm font-medium ${
                   importStatus.includes('Error') || importStatus.includes('Invalid')
@@ -2310,7 +2287,7 @@ export default function ReminderApp() {
                   {importStatus}
                 </div>
               )}
-              
+
               <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
                 Export your reminders and categories to transfer them to another device or create a backup.
               </p>
@@ -2318,18 +2295,39 @@ export default function ReminderApp() {
           </div>
 
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
-            <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-3`}>Danger Zone</h3>
-            <button 
-              type="button" 
-              onClick={() => setShowResetConfirm(true)} 
-              className="w-full bg-red-500 text-white px-4 py-3 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
-            >
-              <Trash2 size={20} />
-              <span>Reset App to Default</span>
-            </button>
-            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
-              This will delete all reminders, custom categories, and statistics. This cannot be undone.
-            </p>
+            <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-1`}>One-Time Reminders</h3>
+            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mb-3`}>Auto-delete past one-time reminders after:</p>
+            <div className="flex gap-1.5 flex-nowrap justify-between">
+              {[{ label: '1 day', value: 1 }, { label: '7 days', value: 7 }, { label: '30 days', value: 30 }, { label: '90 days', value: 90 }, { label: 'Never', value: -1 }].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={async () => {
+                    if (opt.value === oneTimeRetention) return;
+                    // Count how many would be deleted
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const wouldDelete = opt.value === -1 ? 0 : reminders.filter(r => {
+                      if (r.recurrenceType !== 'once' || !r.startDate) return false;
+                      const d = parseLocalDate(r.startDate)!;
+                      return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)) >= opt.value;
+                    }).length;
+                    if (wouldDelete > 0) {
+                      setRetentionConfirm({ newValue: opt.value, label: opt.label, count: wouldDelete });
+                    } else {
+                      setOneTimeRetention(opt.value);
+                      await saveRetentionSetting(opt.value);
+                    }
+                  }}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition text-center ${
+                    oneTimeRetention === opt.value
+                      ? 'bg-blue-900 text-white border-blue-600'
+                      : darkMode ? 'bg-transparent text-gray-300 border-gray-500 hover:border-gray-400' : 'bg-transparent text-gray-600 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
@@ -2455,22 +2453,25 @@ export default function ReminderApp() {
               </div>
             )}
           </div>
-          
+
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
-            <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-800'} mb-3`}>Help</h3>
+            <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-3`}>Danger Zone</h3>
             <button
               type="button"
-              onClick={() => setShowTutorial(true)}
-              className="w-full bg-blue-900 text-white px-4 py-3 rounded-lg hover:bg-blue-800 transition flex items-center justify-center gap-2 border border-blue-600"
+              onClick={() => setShowResetConfirm(true)}
+              className="w-full bg-red-500 text-white px-4 py-3 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
             >
-              <Bell size={20} />
-              <span>View App Tutorial</span>
+              <Trash2 size={20} />
+              <span>Reset App to Default</span>
             </button>
+            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
+              This will delete all reminders, custom categories, and statistics. This cannot be undone.
+            </p>
           </div>
 
           <div className={`${darkMode ? 'bg-gray-700' : 'bg-white'} rounded-xl shadow-lg p-4`}>
             <h3 className={`font-semibold ${darkMode ? 'text-gray-400' : 'text-gray-800'} mb-2`}>About</h3>
-            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Simple Reminders v0.8</p>
+            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Simple Reminders v0.8.1</p>
             <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>All data is stored locally on your device.</p>
           </div>
         </div>
