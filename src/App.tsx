@@ -182,7 +182,7 @@ function SetupWizard({
       {step === 1 && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
           {adLogo && <img src={adLogo} alt="Alpha Delta Studios" style={{ width: '200px', height: 'auto', borderRadius: '12px', marginBottom: '16px' }} />}
-          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '1.6rem', letterSpacing: '0.16em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
+          <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '2.2rem', letterSpacing: '0.12em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
             SIMPLE REMINDERS
           </h1>
           <p style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 600, fontSize: '0.6rem', letterSpacing: '0.12em', color: '#4CAF50', marginTop: '6px' }}>
@@ -309,7 +309,7 @@ function SetupWizard({
 
       {step === 5 && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" className="w-24 h-24 mb-8 rounded-2xl shadow-lg" />}
+          {adLogo && <img src={adLogo} alt="Alpha Delta Studios" style={{ width: '200px', height: 'auto', borderRadius: '12px', marginBottom: '16px' }} />}
           <h1 style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 900, fontSize: '1.5rem', letterSpacing: '0.1em', color: 'white', lineHeight: 1.3, textShadow: '0 0 20px rgba(61,184,74,0.4)' }}>
             You're all set.
           </h1>
@@ -319,7 +319,7 @@ function SetupWizard({
             onClick={onFinish}
             className="mt-12 w-full max-w-xs bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition"
           >
-            Let's Go
+            Instructions
           </button>
         </div>
       )}
